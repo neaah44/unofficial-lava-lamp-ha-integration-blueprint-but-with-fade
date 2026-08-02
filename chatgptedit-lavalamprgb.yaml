@@ -1,0 +1,90 @@
+blueprint:
+  name: Lava Lamp RGB Light Sync
+  description: Set an RGB light to the lava lamp color while the stream is live.
+  domain: automation
+  input:
+    live_sensor:
+      name: Lava lamp live sensor
+      description: The binary sensor that is on while the stream is live.
+      selector:
+        entity:
+          filter:
+            - domain: binary_sensor
+
+    rgb_list_sensor:
+      name: Lava lamp RGB list sensor
+      description: The lava lamp sensor that outputs a RGB list like [100, 255, 0].
+      selector:
+        entity:
+          filter:
+            - domain: sensor
+
+    target_light:
+      name: Light
+      description: The RGB light to keep in sync.
+      selector:
+        target:
+          entity:
+            - domain: light
+
+    brightness_pct:
+      name: Brightness percentage
+      description: Set brightness from 1 to 100 when updating color. Leave empty to keep the current brightness.
+      default: ""
+      selector:
+        text:
+
+    transition:
+      name: Transition time
+      description: Fade time in seconds between colors.
+      default: 2
+      selector:
+        number:
+          min: 0
+          max: 60
+          step: 1
+          mode: box
+
+variables:
+  live_sensor: !input live_sensor
+  rgb_list_sensor: !input rgb_list_sensor
+  brightness_pct: !input brightness_pct
+  transition: !input transition
+
+mode: queued
+max_exceeded: silent
+
+trigger:
+  - platform: state
+    entity_id: !input live_sensor
+    to: "on"
+
+  - platform: state
+    entity_id: !input rgb_list_sensor
+
+condition:
+  - condition: state
+    entity_id: !input live_sensor
+    state: "on"
+
+  - condition: template
+    value_template: "{{ states(rgb_list_sensor) not in ['unknown', 'unavailable'] }}"
+
+action:
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ brightness_pct | string | trim != '' }}"
+        sequence:
+          - service: light.turn_on
+            target: !input target_light
+            data:
+              rgb_color: "{{ states(rgb_list_sensor) }}"
+              brightness_pct: "{{ brightness_pct | int }}"
+              transition: "{{ transition | int }}"
+    default:
+      - service: light.turn_on
+        target: !input target_light
+        data:
+          rgb_color: "{{ states(rgb_list_sensor) }}"
+          transition: "{{ transition | int }}"
